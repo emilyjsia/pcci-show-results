@@ -27,10 +27,18 @@ export default function Home() {
   const [tally, setTally] = useState<TallyRow[]>([]);
   const [view, setView] = useState<"results" | "tally">("results");
   const [breed, setBreed] = useState("");
+  const [breeds, setBreeds] = useState<string[]>([]);
   const [pcciNo, setPcciNo] = useState("");
   const [showDateFrom, setShowDateFrom] = useState("");
   const [showDateTo, setShowDateTo] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/breeds")
+      .then((r) => r.ok ? r.json() : [])
+      .then((b) => setBreeds(Array.isArray(b) ? b : []))
+      .catch(() => {});
+  }, []);
 
   const runSearch = useCallback(async () => {
     setLoading(true);
@@ -104,17 +112,24 @@ export default function Home() {
             <span style={{ fontSize: 12, color: "var(--muted)" }}>Breed</span>
             <input
               type="text"
+              list="breed-list"
               placeholder="e.g. Golden Retriever"
               value={breed}
               onChange={(e) => setBreed(e.target.value)}
+              autoComplete="off"
               style={{
                 padding: "8px 12px",
                 borderRadius: 8,
                 border: "1px solid var(--border)",
                 background: "var(--bg)",
-                width: 160,
+                width: 180,
               }}
             />
+            <datalist id="breed-list">
+              {breeds.map((b) => (
+                <option key={b} value={b} />
+              ))}
+            </datalist>
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 12, color: "var(--muted)" }}>PCCI No.</span>

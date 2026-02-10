@@ -22,6 +22,11 @@ export default function AdminPage() {
     points: "",
     placement: "",
   });
+  const [breeds, setBreeds] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/breeds").then((r) => r.ok ? r.json() : []).then((b) => setBreeds(Array.isArray(b) ? b : [])).catch(() => {});
+  }, []);
 
   const fetchShows = useCallback(async () => {
     try {
@@ -154,13 +159,14 @@ export default function AdminPage() {
         <form onSubmit={handleAddResult} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
           <input type="text" placeholder="Show date" value={addForm.showDate} onChange={(e) => setAddForm((f) => ({ ...f, showDate: e.target.value }))} style={styles.input} />
           <input type="text" placeholder="Show name" value={addForm.showName} onChange={(e) => setAddForm((f) => ({ ...f, showName: e.target.value }))} style={styles.input} />
-          <input type="text" placeholder="Breed" value={addForm.breed} onChange={(e) => setAddForm((f) => ({ ...f, breed: e.target.value }))} style={styles.input} />
+          <input type="text" list="admin-breed-list" placeholder="Breed" value={addForm.breed} onChange={(e) => setAddForm((f) => ({ ...f, breed: e.target.value }))} autoComplete="off" style={styles.input} />
           <input type="text" placeholder="PCCI No." value={addForm.pcciNo} onChange={(e) => setAddForm((f) => ({ ...f, pcciNo: e.target.value }))} style={styles.input} />
           <input type="text" placeholder="Dog name" value={addForm.dogName} onChange={(e) => setAddForm((f) => ({ ...f, dogName: e.target.value }))} style={styles.input} />
           <input type="number" placeholder="Points" value={addForm.points} onChange={(e) => setAddForm((f) => ({ ...f, points: e.target.value }))} style={styles.input} />
           <input type="text" placeholder="Placement" value={addForm.placement} onChange={(e) => setAddForm((f) => ({ ...f, placement: e.target.value }))} style={styles.input} />
           <button type="submit" disabled={loading} style={styles.btn}>Add</button>
         </form>
+        <datalist id="admin-breed-list">{breeds.map((b) => <option key={b} value={b} />)}</datalist>
       </section>
 
       <section style={{ background: "var(--surface)", borderRadius: 12, padding: 20, marginBottom: 24 }}>

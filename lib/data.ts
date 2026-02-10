@@ -81,6 +81,15 @@ export async function searchResults(filters: {
   return list.sort((a, b) => b.showDate.localeCompare(a.showDate));
 }
 
+export async function getDistinctBreeds(): Promise<string[]> {
+  const list = await getAllResults();
+  const seen = new Set<string>();
+  for (const r of list) {
+    if (r.breed?.trim()) seen.add(r.breed.trim());
+  }
+  return Array.from(seen).sort((a, b) => a.localeCompare(b));
+}
+
 export async function getTallyByPcciNo(filters?: {
   breed?: string;
   showDateFrom?: string;
