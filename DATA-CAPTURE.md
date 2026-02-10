@@ -1,6 +1,6 @@
 # Capturing Data from PCCI
 
-PCCI publishes show results as **PDF files** on their [Show Results](https://www.pcci.org.ph/shows/show-results/show-results-2025/) page. The app can't scrape tables directly from PDFs on the fly—you need to extract the data into your database first.
+PCCI publishes show results as **PDF files** on their [Show Results](https://www.pcci.org.ph/shows/show-results/show-results-2025/) page. The app extracts data from PDFs **in your browser** (so it works on Vercel and other hosted environments).
 
 ## How to populate your database
 

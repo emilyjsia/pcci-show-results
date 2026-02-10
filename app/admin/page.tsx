@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { extractTextFromPdf } from "@/lib/extractPdfClient";
 
 type ShowListing = { date: string; club: string; show: string; resultUrl: string };
 
@@ -73,10 +74,15 @@ export default function AdminPage() {
     setExtractingUrl(url);
     setExtractMsg("");
     try {
-      const res = await fetch("/api/extract-pdf", {
+      const text = await extractTextFromPdf(url.trim());
+      const res = await fetch("/api/import-pdf-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim(), showDate: showDate.trim(), showName: showName.trim() }),
+        body: JSON.stringify({
+          text,
+          showDate: showDate.trim(),
+          showName: showName.trim(),
+        }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -84,8 +90,8 @@ export default function AdminPage() {
       } else {
         setExtractMsg(data.error || "Extraction failed.");
       }
-    } catch (_) {
-      setExtractMsg("Request failed.");
+    } catch (e) {
+      setExtractMsg(e instanceof Error ? e.message : "Request failed.");
     } finally {
       setExtractingUrl(null);
     }
