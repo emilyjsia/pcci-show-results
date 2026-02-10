@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { importResults } from "@/lib/data";
 
-type Row = { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; points: number; placement?: string };
+type Row = { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; judge?: string; points: number; placement?: string };
 
 function normalizePcciNo(s: string): string {
   return String(s ?? "").trim().replace(/\s+/g, "");
@@ -20,7 +20,7 @@ function parseTextLines(text: string, showDate: string, showName: string): Row[]
     const lastNum = parts.findIndex((p) => /^\d+(\.\d+)?$/.test(p));
     const points = lastNum >= 0 ? Number(parts[lastNum]) : 0;
     const placement = parts.length > 3 ? parts[3] : undefined;
-    out.push({ showDate, showName, breed, pcciNo, dogName, points, placement });
+    out.push({ showDate, showName, breed, pcciNo, dogName, points, placement, judge: undefined });
   }
   return out;
 }
@@ -28,17 +28,33 @@ function parseTextLines(text: string, showDate: string, showName: string): Row[]
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const text = (body.text ?? "").trim();
     const showDate = (body.showDate ?? "").trim();
     const showName = (body.showName ?? "").trim();
-    if (!text) {
-      return NextResponse.json({ ok: false, error: "Missing text" }, { status: 400 });
+    let rows: Row[] = [];
+
+    if (Array.isArray(body.rows) && body.rows.length > 0) {
+      rows = body.rows.map((r: { breed?: string; pcciNo?: string; dogName?: string; judge?: string; points?: number; placement?: string }) => ({
+        showDate,
+        showName,
+        breed: String(r.breed ?? "").trim(),
+        pcciNo: String(r.pcciNo ?? "").trim().replace(/\s+/g, ""),
+        dogName: r.dogName != null ? String(r.dogName).trim() : undefined,
+        judge: r.judge != null ? String(r.judge).trim() : undefined,
+        points: Number(r.points) || 0,
+        placement: r.placement != null ? String(r.placement).trim() : undefined,
+      })).filter((r: Row) => r.pcciNo || r.breed);
+    } else {
+      const text = (body.text ?? "").trim();
+      if (!text) {
+        return NextResponse.json({ ok: false, error: "Missing text or rows" }, { status: 400 });
+      }
+      rows = parseTextLines(text, showDate, showName);
     }
-    const rows = parseTextLines(text, showDate, showName);
+
     if (rows.length === 0) {
       return NextResponse.json({
         ok: false,
-        error: "Could not parse rows from text. Try adding results manually or paste from your sheet.",
+        error: "Could not parse rows. Try adding results manually or paste from your sheet.",
       }, { status: 422 });
     }
     const imported = await importResults(rows);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { extractTextFromPdf } from "@/lib/extractPdfClient";
+import { extractTableFromPdf } from "@/lib/extractPdfClient";
 
 type ShowListing = { date: string; club: string; show: string; resultUrl: string };
 
@@ -20,6 +20,7 @@ export default function AdminPage() {
     breed: "",
     pcciNo: "",
     dogName: "",
+    judge: "",
     points: "",
     placement: "",
   });
@@ -55,13 +56,14 @@ export default function AdminPage() {
           breed: addForm.breed,
           pcciNo: addForm.pcciNo,
           dogName: addForm.dogName || undefined,
+          judge: addForm.judge || undefined,
           points,
           placement: addForm.placement || undefined,
         }),
       });
       const data = await res.json();
       if (data.id) {
-        setAddForm({ showDate: "", showName: "", breed: "", pcciNo: "", dogName: "", points: "", placement: "" });
+        setAddForm({ showDate: "", showName: "", breed: "", pcciNo: "", dogName: "", judge: "", points: "", placement: "" });
         setImportMsg("Added 1 result.");
       }
     } finally {
@@ -74,12 +76,16 @@ export default function AdminPage() {
     setExtractingUrl(url);
     setExtractMsg("");
     try {
-      const text = await extractTextFromPdf(url.trim());
+      const rows = await extractTableFromPdf(url.trim());
+      if (rows.length === 0) {
+        setExtractMsg("No table rows found in PDF. Try adding results manually or paste from your sheet.");
+        return;
+      }
       const res = await fetch("/api/import-pdf-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text,
+          rows,
           showDate: showDate.trim(),
           showName: showName.trim(),
         }),
@@ -119,16 +125,33 @@ export default function AdminPage() {
     }
   };
 
+  const handleClearAll = async () => {
+    if (!confirm("Delete all saved results? This cannot be undone.")) return;
+    setLoading(true);
+    setImportMsg("");
+    try {
+      const res = await fetch("/api/results", { method: "DELETE" });
+      const data = await res.json();
+      if (data.ok) {
+        setImportMsg("All data cleared.");
+      } else {
+        setImportMsg(data.error || "Failed to clear.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleExportCsv = async () => {
     try {
       const res = await fetch("/api/results");
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
-      const header = "showDate,showName,breed,pcciNo,dogName,points,placement";
+      const header = "showDate,showName,breed,pcciNo,dogName,points,placement,judge";
       const escape = (v: string | number | undefined) =>
         v == null ? "" : String(v).includes(",") ? `"${String(v).replace(/"/g, '""')}"` : String(v);
-      const rows = list.map((r: { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; points: number; placement?: string }) =>
-        [r.showDate, r.showName, r.breed, r.pcciNo, r.dogName ?? "", r.points, r.placement ?? ""].map(escape).join(",")
+      const rows = list.map((r: { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; points: number; placement?: string; judge?: string }) =>
+        [r.showDate, r.showName, r.breed, r.pcciNo, r.dogName ?? "", r.points, r.placement ?? "", r.judge ?? ""].map(escape).join(",")
       );
       const csv = [header, ...rows].join("\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -168,6 +191,7 @@ export default function AdminPage() {
           <input type="text" list="admin-breed-list" placeholder="Breed" value={addForm.breed} onChange={(e) => setAddForm((f) => ({ ...f, breed: e.target.value }))} autoComplete="off" style={styles.input} />
           <input type="text" placeholder="PCCI No." value={addForm.pcciNo} onChange={(e) => setAddForm((f) => ({ ...f, pcciNo: e.target.value }))} style={styles.input} />
           <input type="text" placeholder="Dog name" value={addForm.dogName} onChange={(e) => setAddForm((f) => ({ ...f, dogName: e.target.value }))} style={styles.input} />
+          <input type="text" placeholder="Judge" value={addForm.judge} onChange={(e) => setAddForm((f) => ({ ...f, judge: e.target.value }))} style={styles.input} />
           <input type="number" placeholder="Points" value={addForm.points} onChange={(e) => setAddForm((f) => ({ ...f, points: e.target.value }))} style={styles.input} />
           <input type="text" placeholder="Placement" value={addForm.placement} onChange={(e) => setAddForm((f) => ({ ...f, placement: e.target.value }))} style={styles.input} />
           <button type="submit" disabled={loading} style={styles.btn}>Add</button>
@@ -178,7 +202,7 @@ export default function AdminPage() {
       <section style={{ background: "var(--surface)", borderRadius: 12, padding: 20, marginBottom: 24 }}>
         <h2 style={{ margin: "0 0 16px", fontSize: "1.1rem" }}>Import from spreadsheet</h2>
         <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--muted)" }}>
-          Paste from Google Sheets or CSV. Columns: showDate, showName, breed, pcciNo, dogName, points, placement.
+          Paste from Google Sheets or CSV. Columns: showDate, showName, breed, pcciNo, dogName, points, placement, judge.
         </p>
         <textarea
           placeholder="Paste here…"
@@ -192,6 +216,21 @@ export default function AdminPage() {
           <button type="button" onClick={handleExportCsv} style={{ ...styles.btn, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>Export all to CSV</button>
           {importMsg && <span style={{ color: "var(--muted)", fontSize: 14 }}>{importMsg}</span>}
         </div>
+      </section>
+
+      <section style={{ background: "var(--surface)", borderRadius: 12, padding: 20, marginBottom: 24, border: "1px solid var(--border)" }}>
+        <h2 style={{ margin: "0 0 16px", fontSize: "1.1rem", color: "var(--muted)" }}>Clear all data</h2>
+        <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--muted)" }}>
+          Remove every saved result (file or Supabase). Use this if data was imported incorrectly and you want to start over.
+        </p>
+        <button
+          type="button"
+          onClick={handleClearAll}
+          disabled={loading}
+          style={{ ...styles.btn, background: "#c53030", color: "white" }}
+        >
+          Clear all saved data
+        </button>
       </section>
 
       <section style={{ background: "var(--surface)", borderRadius: 12, padding: 20, marginBottom: 24 }}>

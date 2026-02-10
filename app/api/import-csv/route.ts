@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { importResults } from "@/lib/data";
 
-// Columns: showDate, showName, breed, pcciNo, dogName, points, placement
+// Columns: showDate, showName, breed, pcciNo, dogName, points, placement, judge (judge optional)
 // Accepts CSV or TSV (e.g. paste from Google Sheets — copy range, paste here)
-function parseSpreadsheet(text: string): { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; points: number; placement?: string }[] {
+function parseSpreadsheet(text: string): { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; points: number; placement?: string; judge?: string }[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 1) return [];
   const firstLine = lines[0];
@@ -13,9 +13,9 @@ function parseSpreadsheet(text: string): { showDate: string; showName: string; b
       ? line.split("\t").map((p) => p.trim())
       : line.split(",").map((p) => p.replace(/^"|"$/g, "").trim());
   const header = firstLine.toLowerCase();
-  const hasHeader = /showdate|show_name|breed|pcci|dogname|points|placement|date|club|show/.test(header);
+  const hasHeader = /showdate|show_name|breed|pcci|dogname|points|placement|judge|date|club|show/.test(header);
   const start = hasHeader ? 1 : 0;
-  const rows: { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; points: number; placement?: string }[] = [];
+  const rows: { showDate: string; showName: string; breed: string; pcciNo: string; dogName?: string; points: number; placement?: string; judge?: string }[] = [];
   for (let i = start; i < lines.length; i++) {
     const parts = split(lines[i]);
     if (parts.length < 4) continue;
@@ -26,8 +26,9 @@ function parseSpreadsheet(text: string): { showDate: string; showName: string; b
     const dogName = parts[4]?.trim() || undefined;
     const points = Number(parts[5]) || 0;
     const placement = parts[6]?.trim() || undefined;
+    const judge = parts[7]?.trim() || undefined;
     if (!showDate || !pcciNo) continue;
-    rows.push({ showDate, showName, breed, pcciNo, dogName, points, placement });
+    rows.push({ showDate, showName, breed, pcciNo, dogName, points, placement, judge });
   }
   return rows;
 }
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
     const rows = parseSpreadsheet(text);
     if (rows.length === 0) {
-      return NextResponse.json({ ok: false, error: "No valid rows. Use columns: showDate, showName, breed, pcciNo, dogName, points, placement (or paste from Google Sheets with same order)." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "No valid rows. Use columns: showDate, showName, breed, pcciNo, dogName, points, placement, judge (or paste from Google Sheets with same order)." }, { status: 400 });
     }
     const count = await importResults(rows);
     return NextResponse.json({ ok: true, imported: count });

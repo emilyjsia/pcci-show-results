@@ -26,6 +26,7 @@ export async function dbGetAllResults(): Promise<ShowResult[]> {
     breed: String(r.breed),
     pcciNo: String(r.pcci_no),
     dogName: r.dog_name != null ? String(r.dog_name) : undefined,
+    judge: r.judge != null ? String(r.judge) : undefined,
     points: Number(r.points),
     placement: r.placement != null ? String(r.placement) : undefined,
     createdAt: String(r.created_at),
@@ -41,6 +42,7 @@ export async function dbAddResult(result: Omit<ShowResult, "id" | "createdAt">):
     breed: result.breed,
     pcci_no: result.pcciNo,
     dog_name: result.dogName ?? null,
+    judge: result.judge ?? null,
     points: result.points,
     placement: result.placement ?? null,
   };
@@ -62,12 +64,20 @@ export async function dbImportResults(rows: Omit<ShowResult, "id" | "createdAt">
     breed: r.breed,
     pcci_no: r.pcciNo,
     dog_name: r.dogName ?? null,
+    judge: r.judge ?? null,
     points: r.points,
     placement: r.placement ?? null,
   }));
   const { error } = await sb.from(TABLE).insert(toInsert);
   if (error) throw error;
   return rows.length;
+}
+
+export async function dbClearAllResults(): Promise<void> {
+  const sb = getClient();
+  if (!sb) throw new Error("Database not configured");
+  const { error } = await sb.from(TABLE).delete().neq("id", "");
+  if (error) throw error;
 }
 
 export function isDbConfigured(): boolean {

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchResults, addResult, importResults, getTallyByPcciNo } from "@/lib/data";
+import { searchResults, addResult, importResults, getTallyByPcciNo, clearAllResults } from "@/lib/data";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const breed = searchParams.get("breed") ?? undefined;
   const pcciNo = searchParams.get("pcciNo") ?? undefined;
+  const dogName = searchParams.get("dogName") ?? undefined;
   const showDateFrom = searchParams.get("showDateFrom") ?? undefined;
   const showDateTo = searchParams.get("showDateTo") ?? undefined;
   const tally = searchParams.get("tally") === "1";
@@ -12,13 +13,23 @@ export async function GET(request: NextRequest) {
     const rows = await getTallyByPcciNo({
       breed,
       pcciNo,
+      dogName,
       showDateFrom,
       showDateTo,
     });
     return NextResponse.json(rows);
   }
-  const list = await searchResults({ breed, pcciNo, showDateFrom, showDateTo });
+  const list = await searchResults({ breed, pcciNo, dogName, showDateFrom, showDateTo });
   return NextResponse.json(list);
+}
+
+export async function DELETE() {
+  try {
+    await clearAllResults();
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -28,7 +39,7 @@ export async function POST(request: NextRequest) {
       const count = await importResults(body);
       return NextResponse.json({ ok: true, imported: count });
     }
-    const { showDate, showName, breed, pcciNo, dogName, points, placement } = body;
+    const { showDate, showName, breed, pcciNo, dogName, judge, points, placement } = body;
     if (!showDate || !showName || !breed || !pcciNo || typeof points !== "number") {
       return NextResponse.json(
         { ok: false, error: "Missing required: showDate, showName, breed, pcciNo, points" },
@@ -41,6 +52,7 @@ export async function POST(request: NextRequest) {
       breed,
       pcciNo: String(pcciNo),
       dogName,
+      judge,
       points: Number(points),
       placement,
     });

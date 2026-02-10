@@ -7,6 +7,7 @@ create table if not exists show_results (
   breed text not null,
   pcci_no text not null,
   dog_name text,
+  judge text,
   points integer not null default 0,
   placement text
 );
@@ -15,3 +16,6 @@ create table if not exists show_results (
 create index if not exists idx_show_results_pcci_no on show_results(pcci_no);
 create index if not exists idx_show_results_show_date on show_results(show_date);
 create index if not exists idx_show_results_breed on show_results(breed);
+
+-- If table already exists, add judge column:
+-- alter table show_results add column if not exists judge text;

@@ -12,6 +12,7 @@ export interface ShowResult {
   breed: string;
   pcciNo: string;
   dogName?: string;
+  judge?: string;
   points: number;
   placement?: string;
   createdAt: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import Link from "next/link";
 
 type ShowResult = {
@@ -10,6 +10,7 @@ type ShowResult = {
   breed: string;
   pcciNo: string;
   dogName?: string;
+  judge?: string;
   points: number;
   placement?: string;
 };
@@ -22,6 +23,11 @@ type TallyRow = {
   results: ShowResult[];
 };
 
+function displayPcciNo(s: string | undefined): string {
+  if (!s) return "—";
+  return s.replace(/^,?\s*PCCISB\s*/i, "").trim() || s;
+}
+
 export default function Home() {
   const [results, setResults] = useState<ShowResult[]>([]);
   const [tally, setTally] = useState<TallyRow[]>([]);
@@ -29,9 +35,11 @@ export default function Home() {
   const [breed, setBreed] = useState("");
   const [breeds, setBreeds] = useState<string[]>([]);
   const [pcciNo, setPcciNo] = useState("");
+  const [dogName, setDogName] = useState("");
   const [showDateFrom, setShowDateFrom] = useState("");
   const [showDateTo, setShowDateTo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [expandedTallyPcciNo, setExpandedTallyPcciNo] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/breeds")
@@ -46,6 +54,7 @@ export default function Home() {
       const params = new URLSearchParams();
       if (breed) params.set("breed", breed);
       if (pcciNo) params.set("pcciNo", pcciNo);
+      if (dogName) params.set("dogName", dogName);
       if (showDateFrom) params.set("showDateFrom", showDateFrom);
       if (showDateTo) params.set("showDateTo", showDateTo);
       const res = await fetch(`/api/results?${params}`);
@@ -54,7 +63,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [breed, pcciNo, showDateFrom, showDateTo]);
+  }, [breed, pcciNo, dogName, showDateFrom, showDateTo]);
 
   const runTally = useCallback(async () => {
     setLoading(true);
@@ -63,6 +72,7 @@ export default function Home() {
       params.set("tally", "1");
       if (breed) params.set("breed", breed);
       if (pcciNo) params.set("pcciNo", pcciNo);
+      if (dogName) params.set("dogName", dogName);
       if (showDateFrom) params.set("showDateFrom", showDateFrom);
       if (showDateTo) params.set("showDateTo", showDateTo);
       const res = await fetch(`/api/results?${params}`);
@@ -71,7 +81,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [breed, pcciNo, showDateFrom, showDateTo]);
+  }, [breed, pcciNo, dogName, showDateFrom, showDateTo]);
 
   // Run initial search on load so the user sees results or a clear empty state
   useEffect(() => {
@@ -92,7 +102,7 @@ export default function Home() {
           PCCI Show Results
         </h1>
         <p style={{ margin: "8px 0 0", color: "var(--muted)", fontSize: "0.95rem" }}>
-          Search by breed, show date, or PCCI No. and tally points. Data from{" "}
+          Search by breed, dog name, show date, or PCCI No. and tally points. Data from{" "}
           <a href="https://www.pcci.org.ph/shows/show-results/" target="_blank" rel="noopener noreferrer">
             PCCI Show Results
           </a>.
@@ -144,6 +154,22 @@ export default function Home() {
                 border: "1px solid var(--border)",
                 background: "var(--bg)",
                 width: 140,
+              }}
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>Dog name</span>
+            <input
+              type="text"
+              placeholder="e.g. SAN LORENZO JAMBALAYA"
+              value={dogName}
+              onChange={(e) => setDogName(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                background: "var(--bg)",
+                width: 180,
               }}
             />
           </label>
@@ -226,6 +252,7 @@ export default function Home() {
                   <th style={thStyle}>Breed</th>
                   <th style={thStyle}>PCCI No.</th>
                   <th style={thStyle}>Dog name</th>
+                  <th style={thStyle}>Judge</th>
                   <th style={thStyle}>Points</th>
                   <th style={thStyle}>Placement</th>
                 </tr>
@@ -233,7 +260,7 @@ export default function Home() {
               <tbody>
                 {results.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                    <td colSpan={8} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
                       No results. Use filters and click Search, or add data in{" "}
                       <Link href="/admin" style={{ color: "var(--accent)" }}>Data Admin</Link>.
                     </td>
@@ -244,8 +271,9 @@ export default function Home() {
                     <td style={tdStyle}>{r.showDate}</td>
                     <td style={tdStyle}>{r.showName}</td>
                     <td style={tdStyle}>{r.breed}</td>
-                    <td style={tdStyle}>{r.pcciNo}</td>
+                    <td style={tdStyle}>{displayPcciNo(r.pcciNo)}</td>
                     <td style={tdStyle}>{r.dogName ?? "—"}</td>
+                    <td style={tdStyle}>{r.judge ?? "—"}</td>
                     <td style={tdStyle}>{r.points}</td>
                     <td style={tdStyle}>{r.placement ?? "—"}</td>
                   </tr>
@@ -280,13 +308,61 @@ export default function Home() {
                   </tr>
                 )}
                 {tally.map((t) => (
-                  <tr key={t.pcciNo} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={tdStyle}>{t.pcciNo}</td>
-                    <td style={tdStyle}>{t.dogName ?? "—"}</td>
-                    <td style={tdStyle}>{t.breed ?? "—"}</td>
-                    <td style={{ ...tdStyle, fontWeight: 600 }}>{t.totalPoints}</td>
-                    <td style={tdStyle}>{t.resultCount}</td>
-                  </tr>
+                  <Fragment key={t.pcciNo}>
+                    <tr style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={tdStyle}>{displayPcciNo(t.pcciNo)}</td>
+                      <td style={tdStyle}>{t.dogName ?? "—"}</td>
+                      <td style={tdStyle}>{t.breed ?? "—"}</td>
+                      <td style={{ ...tdStyle, fontWeight: 600 }}>{t.totalPoints}</td>
+                      <td style={tdStyle}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTallyPcciNo((prev) => (prev === t.pcciNo ? null : t.pcciNo))}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            font: "inherit",
+                            color: "var(--accent)",
+                            textDecoration: "underline",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {t.resultCount}
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedTallyPcciNo === t.pcciNo && t.results?.length > 0 && (
+                      <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
+                        <td colSpan={5} style={{ ...tdStyle, paddingTop: 0, paddingBottom: 12, verticalAlign: "top" }}>
+                          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Shows that make up the total:</div>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...thStyle, padding: "6px 8px" }}>Show date</th>
+                                <th style={{ ...thStyle, padding: "6px 8px" }}>Show</th>
+                                <th style={{ ...thStyle, padding: "6px 8px" }}>Judge</th>
+                                <th style={{ ...thStyle, padding: "6px 8px" }}>Points</th>
+                                <th style={{ ...thStyle, padding: "6px 8px" }}>Placement</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {t.results.map((r) => (
+                                <tr key={r.id}>
+                                  <td style={{ ...tdStyle, padding: "6px 8px" }}>{r.showDate}</td>
+                                  <td style={{ ...tdStyle, padding: "6px 8px" }}>{r.showName}</td>
+                                  <td style={{ ...tdStyle, padding: "6px 8px" }}>{r.judge ?? "—"}</td>
+                                  <td style={{ ...tdStyle, padding: "6px 8px" }}>{r.points}</td>
+                                  <td style={{ ...tdStyle, padding: "6px 8px" }}>{r.placement ?? "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
