@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { extractTableFromPdf } from "@/lib/extractPdfClient";
+import { extractTableFromPdf, extractTextFromPdf } from "@/lib/extractPdfClient";
 
 type ShowListing = { date: string; club: string; show: string; resultUrl: string };
 
@@ -17,6 +17,7 @@ function apiErrorString(data: unknown, fallback: string): string {
 
 export default function AdminPage() {
   const [shows, setShows] = useState<ShowListing[]>([]);
+  const [showYearFilter, setShowYearFilter] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [importCsv, setImportCsv] = useState("");
   const [importMsg, setImportMsg] = useState("");
@@ -83,11 +84,47 @@ export default function AdminPage() {
   const handleExtractPdf = async (url: string, showDate: string, showName: string) => {
     if (!url?.trim()) return;
     setExtractingUrl(url);
-    setExtractMsg("");
+    setExtractMsg("Extracting…");
     try {
-      const rows = await extractTableFromPdf(url.trim());
-      if (rows.length === 0) {
-        setExtractMsg("No table rows found in PDF. Try adding results manually or paste from your sheet.");
+      const EXTRACT_TIMEOUT_MS = 90000;
+      const rows = await Promise.race([
+        extractTableFromPdf(url.trim()),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Extraction timed out. The PDF may be large or the link may be invalid.")), EXTRACT_TIMEOUT_MS)
+        ),
+      ]);
+      if (!rows || rows.length === 0) {
+        setExtractMsg("Layout parser found no rows. Trying AI fallback…");
+        try {
+          const rawText = await extractTextFromPdf(url.trim());
+          const aiRes = await fetch("/api/extract-pdf-ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: rawText }),
+          });
+          const aiData = (await aiRes.json()) as { ok?: boolean; rows?: { breed: string; pcciNo: string; dogName?: string; judge?: string; points: number; placement?: string }[]; error?: string };
+          if (aiData.ok && aiData.rows?.length) {
+            const res = await fetch("/api/import-pdf-text", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                rows: aiData.rows,
+                showDate: showDate.trim(),
+                showName: showName.trim(),
+              }),
+            });
+            const importData = (await res.json()) as { ok?: boolean; imported?: number };
+            const n = typeof importData.imported === "number" ? importData.imported : aiData.rows.length;
+            setExtractMsg(`Imported ${n} results from PDF (AI fallback).`);
+          } else if (aiData.ok && (!aiData.rows || aiData.rows.length === 0)) {
+            setExtractMsg("AI found no result rows in this PDF. Try adding results manually or paste from a spreadsheet.");
+          } else {
+            setExtractMsg(apiErrorString(aiData, "AI fallback failed."));
+          }
+        } catch (aiErr) {
+          const msg = aiErr instanceof Error ? aiErr.message : "AI fallback failed.";
+          setExtractMsg(`Layout parser found no rows. ${msg}`);
+        }
         return;
       }
       const res = await fetch("/api/import-pdf-text", {
@@ -99,14 +136,23 @@ export default function AdminPage() {
           showName: showName.trim(),
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: { ok?: boolean; imported?: unknown; error?: unknown; rows?: number } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        setExtractMsg(res.ok ? "Imported results from PDF." : `Extraction failed (${res.status}). Server may have returned an error page.`);
+        return;
+      }
       if (data.ok) {
-        setExtractMsg(`Imported ${data.imported} results from PDF.`);
+        const n = typeof data.imported === "number" ? data.imported : (typeof data.rows === "number" ? data.rows : 0);
+        setExtractMsg(`Imported ${n} results from PDF.`);
       } else {
         setExtractMsg(apiErrorString(data, "Extraction failed."));
       }
     } catch (e) {
-      setExtractMsg(e instanceof Error ? e.message : "Request failed.");
+      const msg = e instanceof Error ? e.message : typeof e === "string" ? e : "Request failed.";
+      setExtractMsg(msg || "Extraction failed.");
     } finally {
       setExtractingUrl(null);
     }
@@ -254,7 +300,7 @@ export default function AdminPage() {
       <section style={{ background: "var(--surface)", borderRadius: 12, padding: 20, marginBottom: 24 }}>
         <h2 style={{ margin: "0 0 16px", fontSize: "1.1rem" }}>Extract from PCCI PDF</h2>
         <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--muted)" }}>
-          Paste a PCCI result PDF URL. The app will try to extract breed, PCCI No., points, etc.
+          Paste a PCCI result PDF URL. The app extracts breed, PCCI No., points, etc. If the layout parser finds no rows, an AI fallback runs when <code style={{ fontSize: 12 }}>OPENAI_API_KEY</code> is set.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 280px" }}>
@@ -276,9 +322,38 @@ export default function AdminPage() {
         {extractMsg && <p style={{ margin: "12px 0 0", fontSize: 14, color: "var(--muted)" }}>{extractMsg}</p>}
       </section>
 
-      {shows.length > 0 && (
+      {shows.length > 0 && (() => {
+        const yearFromDate = (d: string) => {
+          const match = d.match(/\b(19|20)\d{2}\b/);
+          return match ? match[0] : "";
+        };
+        const allYears = Array.from(new Set(shows.map((s) => yearFromDate(s.date)).filter(Boolean))).sort((a, b) => Number(b) - Number(a));
+        const filteredShows = showYearFilter ? shows.filter((s) => yearFromDate(s.date) === showYearFilter) : shows;
+        return (
         <section style={{ marginBottom: 24 }}>
           <h2 style={{ margin: "0 0 12px", fontSize: "1.1rem" }}>Shows from PCCI (scrape & extract)</h2>
+          <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--muted)" }}>
+            Shows from 2018–2028. Filter by year to see results from a specific year (same as the year links on the{" "}
+            <a href="https://www.pcci.org.ph/shows/show-results/" target="_blank" rel="noopener noreferrer">PCCI show results page</a>).
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 14, color: "var(--muted)" }}>Year:</span>
+              <select
+                value={showYearFilter}
+                onChange={(e) => setShowYearFilter(e.target.value)}
+                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 14 }}
+              >
+                <option value="">All years</option>
+                {allYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </label>
+            <span style={{ fontSize: 13, color: "var(--muted)" }}>
+              {filteredShows.length} show{filteredShows.length !== 1 ? "s" : ""}
+            </span>
+          </div>
           <div style={{ overflowX: "auto", borderRadius: 12, border: "1px solid var(--border)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -291,8 +366,8 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {shows.map((s, i) => (
-                  <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                {filteredShows.map((s, i) => (
+                  <tr key={`${s.date}-${s.show}-${i}`} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={styles.td}>{s.date}</td>
                     <td style={styles.td}>{s.club}</td>
                     <td style={styles.td}>{s.show}</td>
@@ -310,7 +385,8 @@ export default function AdminPage() {
             </table>
           </div>
         </section>
-      )}
+        );
+      })()}
     </div>
   );
 }
