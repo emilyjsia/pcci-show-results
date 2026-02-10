@@ -20,7 +20,7 @@ function buildRows(items: TextItem[]): string[][] {
   for (const item of items) {
     const y = getY(item);
     let found = false;
-    for (const key of byY.keys()) {
+    for (const key of Array.from(byY.keys())) {
       if (Math.abs(key - y) <= Y_TOLERANCE) {
         byY.get(key)!.push(item);
         found = true;
