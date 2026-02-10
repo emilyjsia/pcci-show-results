@@ -76,7 +76,8 @@ export async function dbImportResults(rows: Omit<ShowResult, "id" | "createdAt">
 export async function dbClearAllResults(): Promise<void> {
   const sb = getClient();
   if (!sb) throw new Error("Database not configured");
-  const { error } = await sb.from(TABLE).delete().neq("id", "");
+  // Match all rows (created_at is always set) so PostgREST accepts the delete
+  const { error } = await sb.from(TABLE).delete().gte("created_at", "1970-01-01");
   if (error) throw error;
 }
 

@@ -6,6 +6,15 @@ import { extractTableFromPdf } from "@/lib/extractPdfClient";
 
 type ShowListing = { date: string; club: string; show: string; resultUrl: string };
 
+function apiErrorString(data: unknown, fallback: string): string {
+  if (data && typeof data === "object" && "error" in data) {
+    const e = (data as { error?: unknown }).error;
+    if (typeof e === "string") return e;
+    if (e && typeof e === "object" && "message" in e) return String((e as { message?: string }).message);
+  }
+  return fallback;
+}
+
 export default function AdminPage() {
   const [shows, setShows] = useState<ShowListing[]>([]);
   const [loading, setLoading] = useState(false);
@@ -94,7 +103,7 @@ export default function AdminPage() {
       if (data.ok) {
         setExtractMsg(`Imported ${data.imported} results from PDF.`);
       } else {
-        setExtractMsg(data.error || "Extraction failed.");
+        setExtractMsg(apiErrorString(data, "Extraction failed."));
       }
     } catch (e) {
       setExtractMsg(e instanceof Error ? e.message : "Request failed.");
@@ -118,7 +127,7 @@ export default function AdminPage() {
         setImportMsg(`Imported ${data.imported} rows.`);
         setImportCsv("");
       } else {
-        setImportMsg(data.error || "Import failed.");
+        setImportMsg(apiErrorString(data, "Import failed."));
       }
     } finally {
       setLoading(false);
@@ -131,12 +140,21 @@ export default function AdminPage() {
     setImportMsg("");
     try {
       const res = await fetch("/api/results", { method: "DELETE" });
-      const data = await res.json();
+      const text = await res.text();
+      let data: { ok?: boolean; error?: unknown } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        setImportMsg(res.ok ? "All data cleared." : `Failed to clear (${res.status}).`);
+        return;
+      }
       if (data.ok) {
         setImportMsg("All data cleared.");
       } else {
-        setImportMsg(data.error || "Failed to clear.");
+        setImportMsg(apiErrorString(data, "Failed to clear."));
       }
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : "Request failed.");
     } finally {
       setLoading(false);
     }
