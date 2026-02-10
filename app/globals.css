@@ -1,0 +1,38 @@
+* {
+  box-sizing: border-box;
+}
+:root {
+  --bg: #0f1419;
+  --surface: #1a2332;
+  --border: #2d3a4d;
+  --text: #e6edf3;
+  --muted: #8b9cb3;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --success: #22c55e;
+  --danger: #ef4444;
+}
+html, body {
+  margin: 0;
+  min-height: 100vh;
+}
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+input, select, button, textarea {
+  font: inherit;
+  color: inherit;
+}
+input::placeholder, textarea::placeholder {
+  color: var(--muted);
+}
