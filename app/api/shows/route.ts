@@ -3,14 +3,40 @@ import * as cheerio from "cheerio";
 import type { ShowListing } from "@/lib/types";
 
 const PCCI_BASE = "https://www.pcci.org.ph";
-const SHOW_RESULTS_URLS = [
+const SHOW_RESULTS_HUB = `${PCCI_BASE}/shows/show-results/`;
+const FALLBACK_URLS = [
   `${PCCI_BASE}/shows/show-results/show-results-2025/`,
   `${PCCI_BASE}/shows/show-results/show-results-2026/`,
 ];
 
+async function fetchYearPages(): Promise<string[]> {
+  try {
+    const res = await fetch(SHOW_RESULTS_HUB, {
+      headers: { "User-Agent": "PCCI-ShowResults-App/1.0" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const urls: string[] = [];
+    $('a[href*="show-results"]').each((_, el) => {
+      const href = $(el).attr("href");
+      if (!href) return;
+      const full = href.startsWith("http") ? href : new URL(href, PCCI_BASE).href;
+      if (/show-results-\d{4}\/?$/.test(full) && !urls.includes(full)) {
+        urls.push(full.endsWith("/") ? full : full + "/");
+      }
+    });
+    return urls.length > 0 ? urls : FALLBACK_URLS;
+  } catch {
+    return FALLBACK_URLS;
+  }
+}
+
 export async function GET() {
+  const urls = await fetchYearPages();
   const listings: ShowListing[] = [];
-  for (const url of SHOW_RESULTS_URLS) {
+  for (const url of urls) {
     try {
       const res = await fetch(url, {
         headers: { "User-Agent": "PCCI-ShowResults-App/1.0" },

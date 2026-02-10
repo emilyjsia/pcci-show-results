@@ -93,7 +93,7 @@ export default function Home() {
         </h1>
         <p style={{ margin: "8px 0 0", color: "var(--muted)", fontSize: "0.95rem" }}>
           Search by breed, show date, or PCCI No. and tally points. Data from{" "}
-          <a href="https://www.pcci.org.ph/shows/show-results/show-results-2025/" target="_blank" rel="noopener noreferrer">
+          <a href="https://www.pcci.org.ph/shows/show-results/" target="_blank" rel="noopener noreferrer">
             PCCI Show Results
           </a>.
         </p>
@@ -297,7 +297,7 @@ export default function Home() {
       <footer style={{ marginTop: 48, paddingTop: 16, borderTop: "1px solid var(--border)", textAlign: "center" }}>
         <Link href="/admin" style={{ fontSize: 13, color: "var(--muted)" }}>Data Admin</Link>
         {" · "}
-        <a href="https://www.pcci.org.ph/shows/show-results/show-results-2025/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "var(--muted)" }}>
+        <a href="https://www.pcci.org.ph/shows/show-results/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "var(--muted)" }}>
           PCCI Show Results
         </a>
       </footer>
