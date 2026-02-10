@@ -4,12 +4,20 @@ import type { ShowListing } from "@/lib/types";
 
 const PCCI_BASE = "https://www.pcci.org.ph";
 const SHOW_RESULTS_HUB = `${PCCI_BASE}/shows/show-results/`;
-const FALLBACK_URLS = [
-  `${PCCI_BASE}/shows/show-results/show-results-2025/`,
-  `${PCCI_BASE}/shows/show-results/show-results-2026/`,
-];
 
-async function fetchYearPages(): Promise<string[]> {
+// Fixed range of years to fetch so we're not limited by what the hub page links to
+const YEAR_START = 2018;
+const YEAR_END = 2028;
+
+function getYearPageUrls(): string[] {
+  const urls: string[] = [];
+  for (let y = YEAR_END; y >= YEAR_START; y--) {
+    urls.push(`${PCCI_BASE}/shows/show-results/show-results-${y}/`);
+  }
+  return urls;
+}
+
+async function fetchYearPagesFromHub(): Promise<string[]> {
   try {
     const res = await fetch(SHOW_RESULTS_HUB, {
       headers: { "User-Agent": "PCCI-ShowResults-App/1.0" },
@@ -27,14 +35,22 @@ async function fetchYearPages(): Promise<string[]> {
         urls.push(full.endsWith("/") ? full : full + "/");
       }
     });
-    return urls.length > 0 ? urls : FALLBACK_URLS;
+    return urls;
   } catch {
-    return FALLBACK_URLS;
+    return [];
   }
 }
 
+/** Hub may only link a few years; merge with full year range so we don't miss shows */
+function mergeYearUrls(hubUrls: string[]): string[] {
+  const byUrl = new Set<string>(getYearPageUrls());
+  for (const u of hubUrls) byUrl.add(u.endsWith("/") ? u : u + "/");
+  return Array.from(byUrl);
+}
+
 export async function GET() {
-  const urls = await fetchYearPages();
+  const hubUrls = await fetchYearPagesFromHub();
+  const urls = mergeYearUrls(hubUrls);
   const listings: ShowListing[] = [];
   for (const url of urls) {
     try {
@@ -76,11 +92,19 @@ export async function GET() {
         }
       });
     } catch (_) {
-      // use sample data if fetch fails (e.g. timeout, CORS)
+      // skip page on fetch failure (e.g. timeout, 404 for future years)
     }
   }
-  if (listings.length === 0) {
-    listings.push(
+  // Dedupe by date+show (same show can appear on multiple year pages)
+  const seen = new Set<string>();
+  const deduped = listings.filter((l) => {
+    const key = `${l.date}\t${l.show}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (deduped.length === 0) {
+    deduped.push(
       {
         date: "JANUARY 22, 2026",
         club: "PCCI",
@@ -95,5 +119,5 @@ export async function GET() {
       }
     );
   }
-  return NextResponse.json(listings);
+  return NextResponse.json(deduped);
 }
