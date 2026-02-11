@@ -11,13 +11,20 @@ function apiErrorString(data: unknown, fallback: string): string {
     const e = (data as { error?: unknown }).error;
     if (typeof e === "string") return e;
     if (e && typeof e === "object" && "message" in e) return String((e as { message?: string }).message);
+    if (e && typeof e === "object") return String(JSON.stringify(e)).slice(0, 200) || fallback;
   }
   return fallback;
 }
 
+function safeCount(n: unknown): number {
+  if (typeof n === "number" && !Number.isNaN(n)) return n;
+  if (typeof n === "string") return parseInt(n, 10) || 0;
+  return 0;
+}
+
 export default function AdminPage() {
   const [shows, setShows] = useState<ShowListing[]>([]);
-  const [showYearFilter, setShowYearFilter] = useState<string>("");
+  const [showYearFilter, setShowYearFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [importCsv, setImportCsv] = useState("");
   const [importMsg, setImportMsg] = useState("");
@@ -113,8 +120,8 @@ export default function AdminPage() {
                 showName: showName.trim(),
               }),
             });
-            const importData = (await res.json()) as { ok?: boolean; imported?: number };
-            const n = typeof importData.imported === "number" ? importData.imported : aiData.rows.length;
+            const importData = (await res.json()) as { ok?: boolean; imported?: unknown };
+            const n = safeCount(importData.imported) || aiData.rows.length;
             setExtractMsg(`Imported ${n} results from PDF (AI fallback).`);
           } else if (aiData.ok && (!aiData.rows || aiData.rows.length === 0)) {
             setExtractMsg("AI found no result rows in this PDF. Try adding results manually or paste from a spreadsheet.");
@@ -145,14 +152,14 @@ export default function AdminPage() {
         return;
       }
       if (data.ok) {
-        const n = typeof data.imported === "number" ? data.imported : (typeof data.rows === "number" ? data.rows : 0);
+        const n = safeCount(data.imported) || safeCount((data as { rows?: unknown }).rows);
         setExtractMsg(`Imported ${n} results from PDF.`);
       } else {
         setExtractMsg(apiErrorString(data, "Extraction failed."));
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : typeof e === "string" ? e : "Request failed.";
-      setExtractMsg(msg || "Extraction failed.");
+      const msg = e instanceof Error ? e.message : typeof e === "string" ? e : (e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : "Request failed.");
+      setExtractMsg(String(msg || "Extraction failed."));
     } finally {
       setExtractingUrl(null);
     }
@@ -170,7 +177,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        setImportMsg(`Imported ${data.imported} rows.`);
+        setImportMsg(`Imported ${safeCount(data.imported)} rows.`);
         setImportCsv("");
       } else {
         setImportMsg(apiErrorString(data, "Import failed."));
@@ -328,7 +335,7 @@ export default function AdminPage() {
           return match ? match[0] : "";
         };
         const allYears = Array.from(new Set(shows.map((s) => yearFromDate(s.date)).filter(Boolean))).sort((a, b) => Number(b) - Number(a));
-        const filteredShows = showYearFilter ? shows.filter((s) => yearFromDate(s.date) === showYearFilter) : shows;
+        const filteredShows = showYearFilter && showYearFilter !== "all" ? shows.filter((s) => yearFromDate(s.date) === showYearFilter) : shows;
         return (
         <section style={{ marginBottom: 24 }}>
           <h2 style={{ margin: "0 0 12px", fontSize: "1.1rem" }}>Shows from PCCI (scrape & extract)</h2>
@@ -344,7 +351,7 @@ export default function AdminPage() {
                 onChange={(e) => setShowYearFilter(e.target.value)}
                 style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 14 }}
               >
-                <option value="">All years</option>
+                <option value="all">All years</option>
                 {allYears.map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}
