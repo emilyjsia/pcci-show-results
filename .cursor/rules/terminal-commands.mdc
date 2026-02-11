@@ -1,0 +1,14 @@
+---
+description: Prefer telling the user which terminal commands to run themselves
+alwaysApply: true
+---
+
+# Terminal commands
+
+When a task involves running commands that need credentials, network, or user interaction (e.g. `git push`, `npm install`, deploy, login), **do not run them in the terminal**. Instead:
+
+1. **Tell the user exactly which commands to run** in their own terminal.
+2. List the commands in a clear, copy-pasteable block (e.g. with ```bash).
+3. Briefly say why they need to run it (e.g. "Push requires your GitHub auth").
+
+Only run terminal commands yourself when they are safe, non-interactive, and don't require the user's credentials (e.g. local lint, build, or read-only checks).

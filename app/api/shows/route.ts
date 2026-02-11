@@ -48,53 +48,54 @@ function mergeYearUrls(hubUrls: string[]): string[] {
   return Array.from(byUrl);
 }
 
+function scrapeShowsFromHtml(html: string): ShowListing[] {
+  const $ = cheerio.load(html);
+  const listings: ShowListing[] = [];
+  const seen = new Set<string>();
+
+  $("table tr").each((_, row) => {
+    const cells = $(row).find("td");
+    if (cells.length < 5) return;
+    const dateText = $(cells[0]).text().trim();
+    const club = $(cells[1]).text().trim();
+    const show = $(cells[2]).text().trim();
+    const linkEl = $(cells[4]).find('a[href*=".pdf"]').first();
+    const href = linkEl.attr("href");
+    if (!dateText || !show) return;
+    const key = `${dateText}\t${show}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const resultUrl = href?.startsWith("http") ? href : href ? new URL(href, PCCI_BASE).href : "";
+    listings.push({ date: dateText, club, show, resultUrl: resultUrl || "" });
+  });
+
+  return listings;
+}
+
 export async function GET() {
   const hubUrls = await fetchYearPagesFromHub();
   const urls = mergeYearUrls(hubUrls);
-  const listings: ShowListing[] = [];
-  for (const url of urls) {
-    try {
+
+  // Fetch all year pages in parallel
+  const results = await Promise.allSettled(
+    urls.map(async (url) => {
       const res = await fetch(url, {
         headers: { "User-Agent": "PCCI-ShowResults-App/1.0" },
         signal: AbortSignal.timeout(10000),
       });
-      if (!res.ok) continue;
+      if (!res.ok) return [];
       const html = await res.text();
-      const $ = cheerio.load(html);
-      $("table tbody tr").each((_, row) => {
-        const cells = $(row).find("td");
-        if (cells.length < 5) return;
-        const dateText = $(cells[0]).text().trim();
-        const club = $(cells[1]).text().trim();
-        const show = $(cells[2]).text().trim();
-        const link = $(cells[4]).find('a[href*=".pdf"]').attr("href");
-        if (!dateText || !show) return;
-        const resultUrl = link?.startsWith("http") ? link : link ? new URL(link, PCCI_BASE).href : "";
-        listings.push({
-          date: dateText,
-          club,
-          show,
-          resultUrl: resultUrl || "",
-        });
-      });
-      $("table tr").each((_, row) => {
-        const cells = $(row).find("td");
-        if (cells.length < 5) return;
-        const dateText = $(cells[0]).text().trim();
-        const club = $(cells[1]).text().trim();
-        const show = $(cells[2]).text().trim();
-        const linkEl = $(cells[4]).find('a[href*=".pdf"]').first();
-        const href = linkEl.attr("href");
-        if (!dateText || !show) return;
-        const resultUrl = href?.startsWith("http") ? href : href ? new URL(href, PCCI_BASE).href : "";
-        if (!listings.some((l) => l.date === dateText && l.show === show)) {
-          listings.push({ date: dateText, club, show, resultUrl: resultUrl || "" });
-        }
-      });
-    } catch (_) {
-      // skip page on fetch failure (e.g. timeout, 404 for future years)
+      return scrapeShowsFromHtml(html);
+    })
+  );
+
+  const listings: ShowListing[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled" && Array.isArray(r.value)) {
+      for (const show of r.value) listings.push(show);
     }
   }
+
   // Dedupe by date+show (same show can appear on multiple year pages)
   const seen = new Set<string>();
   const deduped = listings.filter((l) => {
@@ -103,6 +104,7 @@ export async function GET() {
     seen.add(key);
     return true;
   });
+
   if (deduped.length === 0) {
     deduped.push(
       {

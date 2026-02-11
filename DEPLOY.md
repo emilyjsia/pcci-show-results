@@ -97,6 +97,7 @@ git push -u origin main
 | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase **Project URL** | Production, Preview, Development |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase **anon public** key | Production, Preview, Development |
 | `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase **service_role** key | Production, Preview, Development |
+| `OPENAI_API_KEY` | (Optional) OpenAI API key for PDF extraction fallback | Production, Preview, Development |
 
 6. Click **Deploy**.
 
@@ -126,4 +127,4 @@ Deployment usually takes 1–2 minutes. When it finishes, you’ll get a URL lik
 - Redeploy after changing env vars: **Deployments** → three dots on latest → **Redeploy**.
 
 **PDF Extract fails**
-- PCCI PDFs can vary in layout. If extraction fails, add results manually or paste from your spreadsheet in Admin.
+- PCCI PDFs can vary in layout. The app first tries a layout-based parser; if it finds no rows, it can use an **AI fallback** when `OPENAI_API_KEY` is set in Vercel. Add that env var (from [platform.openai.com](https://platform.openai.com/api-keys)) and redeploy to enable it. Otherwise, add results manually or paste from your spreadsheet in Admin.
